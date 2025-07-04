@@ -135,18 +135,17 @@ const skipQuestionnaire = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    logger.info(`User skipping questionnaire: ${userId}`);
-    console.log('Supabase URL:', process.env.SUPABASE_URL);
-    console.log('Supabase Key:', process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 5) + '...');
-    // Update user onboarding status to skipped
+    logger.info(`[skipQuestionnaire] Received request for user: ${userId}`);
     
-      const { error: userUpdateError } = await supabase
+    const { data, error: userUpdateError } = await supabase
       .from('users')
       .update({ onboarding_status: 'skipped' })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select()
+      .single();
 
     if (userUpdateError) {
-      logger.error('Supabase user update error:', {
+      logger.error('[skipQuestionnaire] Supabase user update error:', {
         message: userUpdateError.message,
         details: userUpdateError.details,
         hint: userUpdateError.hint,
@@ -155,13 +154,14 @@ const skipQuestionnaire = async (req, res) => {
       throw userUpdateError;
     }
 
-    logger.info('User questionnaire skipped successfully');
+    logger.info(`[skipQuestionnaire] User onboarding_status updated to 'skipped' for user: ${userId}. Updated user data:`, data);
 
     res.json({
-      message: 'Questionnaire skipped successfully'
+      message: 'Questionnaire skipped successfully',
+      user: data
     });
   } catch (error) {
-    logger.error('Skip questionnaire error:', error);
+    logger.error('[skipQuestionnaire] Error:', error);
     res.status(500).json({
       error: process.env.NODE_ENV === 'development'
         ? `Failed to skip questionnaire: ${error.message || error}`

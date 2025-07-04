@@ -12,7 +12,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children, 
   allowedRoles 
 }) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, onboardingSkippedThisSession } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -27,10 +27,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check if user needs onboarding (except for onboarding route itself)
-  if (user && (user.onboarding_status === 'pending' || user.onboarding_status === 'skipped') && location.pathname !== '/onboarding') {
+  // Check if user needs onboarding
+  const needsOnboarding = user && (user.onboarding_status === 'pending' || user.onboarding_status === 'skipped');
+  
+  console.log(`[ProtectedRoute.tsx] Checking onboarding status for path: ${location.pathname}`);
+  console.log(`[ProtectedRoute.tsx] User onboarding_status: ${user?.onboarding_status}`);
+  console.log(`[ProtectedRoute.tsx] Onboarding skipped this session: ${onboardingSkippedThisSession}`);
+
+  if (needsOnboarding && !onboardingSkippedThisSession && location.pathname !== '/onboarding') {
+    console.log(`[ProtectedRoute.tsx] Redirecting to /onboarding.`);
     return <Navigate to="/onboarding" replace />;
   }
+
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }

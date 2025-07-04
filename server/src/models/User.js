@@ -9,7 +9,7 @@ export class User {
 
   static async findByPk(id) {
     try {
-      logger.info('Finding user by ID:', id);
+      logger.info(`Finding user by ID: ${id}`);
       const { data, error } = await supabase
         .from('users')
         .select('*')

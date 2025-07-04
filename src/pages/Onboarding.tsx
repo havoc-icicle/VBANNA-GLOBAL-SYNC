@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
-  const { updateProfile } = useAuth();
+  const { updateProfile, skipOnboardingForSession } = useAuth();
 
   const handleComplete = async (recommendation?: any) => {
     try {
@@ -39,11 +39,15 @@ export const Onboarding: React.FC = () => {
   };
 
   const handleSkip = async () => {
+    console.log('[Onboarding.tsx] handleSkip triggered.');
     try {
-      // Update user's onboarding status in context
+      console.log('[Onboarding.tsx] Calling updateProfile with onboarding_status: skipped');
       await updateProfile({ onboarding_status: 'skipped' });
+      console.log('[Onboarding.tsx] updateProfile finished. Skipping for session and navigating to /dashboard.');
+      skipOnboardingForSession();
       navigate('/dashboard');
     } catch (error) {
+      console.error('[Onboarding.tsx] Error in handleSkip:', error);
       // If update fails, still proceed
       navigate('/dashboard');
     }

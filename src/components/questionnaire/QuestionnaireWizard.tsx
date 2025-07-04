@@ -195,14 +195,8 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
     }
   };
 
-  const handleSkip = async () => {
-    try {
-      await apiService.post('/questionnaires/skip');
-      toast.success('Questionnaire skipped');
-      onSkip();
-    } catch (error: any) {
-      toast.error('Failed to skip questionnaire');
-    }
+  const handleSkip = () => {
+    onSkip();
   };
 
   const renderQuestion = (question: Question) => {

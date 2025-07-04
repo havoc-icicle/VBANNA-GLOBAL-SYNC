@@ -8,6 +8,8 @@ interface AuthContextType extends AuthState {
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;
+  skipOnboardingForSession: () => void;
+  onboardingSkippedThisSession: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,6 +25,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated: false,
     isLoading: true,
   });
+  const [onboardingSkippedThisSession, setOnboardingSkippedThisSession] = useState(false);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -64,6 +67,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.login(credentials);
       
       localStorage.setItem('token', response.token);
+      setOnboardingSkippedThisSession(false); // Reset on new login
       
       setAuthState({
         user: response.user,
@@ -84,6 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.register(data);
       
       localStorage.setItem('token', response.token);
+      setOnboardingSkippedThisSession(false); // Reset on new registration
       
       setAuthState({
         user: response.user,
@@ -107,24 +112,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       isAuthenticated: false,
       isLoading: false,
     });
+    setOnboardingSkippedThisSession(false); // Reset on logout
     toast.success('Logged out successfully');
   };
 
   const updateProfile = async (data: Partial<User>) => {
+    console.log('[AuthContext.tsx] updateProfile called with:', data);
     try {
       const updatedUser = await authService.updateProfile(data, authState.token!);
+      console.log('[AuthContext.tsx] Profile updated on backend, new user data:', updatedUser);
       
-      setAuthState(prev => ({
-        ...prev,
-        user: updatedUser,
-      }));
+      setAuthState(prev => {
+        console.log('[AuthContext.tsx] Updating local auth state.');
+        const newState = {
+          ...prev,
+          user: updatedUser,
+        };
+        console.log('[AuthContext.tsx] New auth state:', newState);
+        return newState;
+      });
 
       toast.success('Profile updated successfully!');
       return updatedUser;
     } catch (error: any) {
+      console.error('[AuthContext.tsx] Error updating profile:', error);
       toast.error(error.message || 'Profile update failed');
       throw error;
     }
+  };
+
+  const skipOnboardingForSession = () => {
+    console.log('[AuthContext.tsx] Setting onboardingSkippedThisSession to true.');
+    setOnboardingSkippedThisSession(true);
   };
 
   const contextValue: AuthContextType = {
@@ -133,6 +152,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     updateProfile,
+    skipOnboardingForSession,
+    onboardingSkippedThisSession,
   };
 
   return (
