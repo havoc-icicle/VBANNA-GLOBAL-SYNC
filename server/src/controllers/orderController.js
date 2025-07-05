@@ -58,15 +58,15 @@ const createOrder = async (req, res) => {
     });
 
     // Calculate pricing
-    const pricing = calculatePricing({
+    const pricing = await calculatePricing({
       service,
       priority,
-      is_volume_discount: user_order_count > 0,
+      isVolumeDiscount: user_order_count > 0,
       country: req.user.country || 'Singapore',
     });
 
     // Generate order number
-    const order_number = generateOrderNumber();
+    const order_number = await generateOrderNumber(); // Added await here as well, just in case it becomes async
 
     // Calculate expected completion date
     const turnaround_days =
@@ -112,8 +112,8 @@ const createOrder = async (req, res) => {
         {
           description: service.name,
           quantity: 1,
-          unit_rice: pricing.base_price,
-          total: pricing.base_price,
+          unit_price: pricing.basePrice, // Corrected from unit_rice and pricing.base_price
+          total: pricing.basePrice, // Corrected from pricing.base_price
         },
       ],
       billing_address: {
@@ -394,6 +394,68 @@ const requestRevision = async (req, res) => {
   }
 };
 
+const updateOrderMilestone = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newMilestone } = req.body;
+
+    const order = await Order.findByPk(id);
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      });
+    }
+
+    // Ensure the newMilestone exists in the order's milestoneTemplate (from service)
+    const service = await Service.findByPk(order.service_id);
+    if (!service || !service.milestone_template.some(m => m.name === newMilestone)) {
+      return res.status(400).json({
+        error: 'Invalid milestone name provided.',
+      });
+    }
+
+    // Update current_milestone and the milestones array
+    const updatedMilestones = order.milestones.map(m => {
+      if (m.name === newMilestone) {
+        return { ...m, status: 'in_progress' };
+      } else if (m.status === 'in_progress') {
+        // Mark previous in_progress as completed if a new one is set
+        return { ...m, status: 'completed', completion_date: new Date().toISOString() };
+      } else {
+        return m;
+      }
+    });
+
+    // If the new milestone wasn't in the existing list, add it as in_progress
+    if (!updatedMilestones.some(m => m.name === newMilestone)) {
+      const newMilestoneTemplate = service.milestone_template.find(m => m.name === newMilestone);
+      if (newMilestoneTemplate) {
+        updatedMilestones.push({ ...newMilestoneTemplate, status: 'in_progress' });
+      }
+    }
+
+    await order.update({
+      currentMilestone: newMilestone,
+      milestones: updatedMilestones,
+    });
+
+    logger.info(
+      `Order milestone updated: ${order.orderNumber} to ${newMilestone} by user ${req.user.id}`
+    );
+
+    res.json({
+      message: 'Order milestone updated successfully',
+      order,
+    });
+  } catch (error) {
+    logger.error('Update order milestone error:', error);
+    res.status(500).json({
+      error: 'Failed to update order milestone',
+    });
+  }
+};
+
 export {
   createOrder,
   getUserOrders,
@@ -401,6 +463,7 @@ export {
   updateOrderStatus,
   getAllOrders,
   requestRevision,
+  updateOrderMilestone, // Export the new function
   orderValidation,
   handleValidationErrors,
 };

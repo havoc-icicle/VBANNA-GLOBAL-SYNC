@@ -80,8 +80,11 @@ export class Service {
         price_max: serviceData.priceMax,
         currency: serviceData.currency || 'SGD',
         rush_surcharge_percent: serviceData.rushSurchargePercent,
+        is_active: serviceData.isActive !== undefined ? serviceData.isActive : true,
         features: serviceData.features || [],
-        additional_notes: serviceData.additionalNotes
+        additional_notes: serviceData.additionalNotes,
+        milestone_template: serviceData.milestoneTemplate || [],
+        rush_available: serviceData.rushAvailable !== undefined ? serviceData.rushAvailable : false,
       })
       .select()
       .single();
@@ -108,6 +111,8 @@ export class Service {
     if (updateData.features) updates.features = updateData.features;
     if (updateData.additionalNotes !== undefined) updates.additional_notes = updateData.additionalNotes;
     if (updateData.isActive !== undefined) updates.is_active = updateData.isActive;
+    if (updateData.milestoneTemplate !== undefined) updates.milestone_template = updateData.milestoneTemplate;
+    if (updateData.rushAvailable !== undefined) updates.rush_available = updateData.rushAvailable;
 
     const { data, error } = await supabase
       .from('services')
@@ -139,6 +144,8 @@ export class Service {
       isActive: this.is_active,
       features: this.features,
       additionalNotes: this.additional_notes,
+      milestoneTemplate: this.milestone_template,
+      rushAvailable: this.rush_available,
       createdAt: this.created_at,
       updatedAt: this.updated_at
     };

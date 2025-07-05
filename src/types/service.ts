@@ -14,8 +14,16 @@ export interface Service {
   isActive: boolean;
   features: string[];
   additionalNotes?: string;
+  milestoneTemplate?: Milestone[];
+  rushAvailable: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Milestone {
+  name: string;
+  description: string;
+  estimated_days: number;
 }
 
 export interface ServiceCategory {

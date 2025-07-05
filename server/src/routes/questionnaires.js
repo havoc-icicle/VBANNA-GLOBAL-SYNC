@@ -24,6 +24,9 @@ router.post('/skip', auth, skipQuestionnaire);
 // Save progress (draft)
 router.post('/progress', auth, saveProgress);
 
+// New endpoint for questionnaire response file uploads
+router.post('/upload-response-file', auth, upload.single('file'), uploadResponseFile);
+
 // Get saved progress
 router.get('/:questionnaireId/progress', auth, getProgress);
 

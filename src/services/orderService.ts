@@ -51,6 +51,13 @@ class OrderService {
   }> {
     return apiService.post(`/orders/${id}/revision`, { revisionNotes });
   }
+
+  async updateOrderMilestone(orderId: string, newMilestone: string): Promise<{
+    message: string;
+    order: Order;
+  }> {
+    return apiService.put(`/orders/${orderId}/milestone`, { newMilestone });
+  }
 }
 
 export const orderService = new OrderService();

@@ -284,6 +284,14 @@ export const Profile: React.FC = () => {
                           </span>
                         </div>
                       )}
+                      {user.complianceStatus && Object.keys(user.complianceStatus).length > 0 && (
+                        <div>
+                          <span className="text-gray-600">Compliance Status:</span>
+                          <pre className="text-xs bg-gray-100 p-2 rounded mt-1 whitespace-pre-wrap">
+                            {JSON.stringify(user.complianceStatus, null, 2)}
+                          </pre>
+                        </div>
+                      )}
                     </div>
                   </div>
 

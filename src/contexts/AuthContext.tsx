@@ -40,6 +40,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             isAuthenticated: true,
             isLoading: false,
           });
+          // Set i18n language based on user preference
+          if (user.language) {
+            i18n.changeLanguage(user.language);
+          }
         } catch (error) {
           localStorage.removeItem('token');
           setAuthState({
@@ -76,6 +80,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
       });
 
+      // Set i18n language based on user preference
+      if (response.user.language) {
+        i18n.changeLanguage(response.user.language);
+      }
+
       toast.success('Login successful!');
     } catch (error: any) {
       toast.error(error.message || 'Login failed');
@@ -97,6 +106,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
       });
 
+      // Set i18n language based on user preference
+      if (response.user.language) {
+        i18n.changeLanguage(response.user.language);
+      }
+
       toast.success('Registration successful!');
     } catch (error: any) {
       toast.error(error.message || 'Registration failed');
@@ -113,6 +127,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       isLoading: false,
     });
     setOnboardingSkippedThisSession(false); // Reset on logout
+    i18n.changeLanguage('en'); // Reset to default language on logout
     toast.success('Logged out successfully');
   };
 
@@ -131,6 +146,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('[AuthContext.tsx] New auth state:', newState);
         return newState;
       });
+
+      // Update i18n language if language preference was changed
+      if (data.language && data.language !== i18n.language) {
+        i18n.changeLanguage(data.language);
+      }
 
       toast.success('Profile updated successfully!');
       return updatedUser;

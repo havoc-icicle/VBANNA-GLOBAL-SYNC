@@ -17,6 +17,7 @@ export interface User {
   partnerSpecificMetadata?: Record<string, any>;
   referralCode?: string;
   partnerType?: string;
+  complianceStatus?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
 }

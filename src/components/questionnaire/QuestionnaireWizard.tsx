@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDropzone } from 'react-dropzone';
 import { 
   ArrowRight, 
   ArrowLeft, 
@@ -7,7 +8,8 @@ import {
   SkipForward,
   CheckCircle,
   AlertCircle,
-  FileText
+  FileText,
+  UploadCloud
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -15,10 +17,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { apiService } from '../../services/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Question {
   id: string;
-  type: 'text' | 'textarea' | 'number' | 'select' | 'multiselect' | 'boolean' | 'date';
+  type: 'text' | 'textarea' | 'number' | 'select' | 'multiselect' | 'boolean' | 'date' | 'file';
   question: string;
   options?: string[];
   required: boolean;
@@ -43,19 +46,24 @@ interface Questionnaire {
 interface QuestionnaireWizardProps {
   onComplete: (recommendation?: any) => void;
   onSkip: () => void;
+  serviceId?: string; // Make serviceId optional for onboarding, required for service-specific
 }
 
 export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
   onComplete,
-  onSkip
+  onSkip,
+  serviceId
 }) => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // Get user from auth context to access country/industry
   const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [currentSection, setCurrentSection] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [filesToUpload, setFilesToUpload] = useState<Record<string, File | null>>({});
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
 
   // Group questions by section
   const sections = questionnaire ? 
@@ -69,16 +77,26 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
 
   const currentSectionData = questionsBySection[currentSection];
   const totalSections = sections.length;
-  const progressPercentage = Math.round(((currentSection + 1) / totalSections) * 100);
+  const progressPercentage = totalSections > 0 ? Math.round(((currentSection + 1) / totalSections) * 100) : 0;
 
   useEffect(() => {
     fetchQuestionnaire();
-  }, []);
+  }, [serviceId, user]); // Re-fetch if serviceId or user changes
 
   const fetchQuestionnaire = async () => {
     try {
       setIsLoading(true);
-      const response = await apiService.get('/questionnaires/active');
+      let response;
+      if (serviceId) {
+        // Fetch service-specific questionnaire
+        // TODO: Implement backend endpoint for /questionnaires/service/:serviceId/:industryId/:countryId
+        // For now, we'll use a simplified approach or rely on the existing active one if no specific match
+        response = await apiService.get(`/questionnaires/active?serviceId=${serviceId}&country=${user?.country || ''}&industry=${user?.partnerSpecificMetadata?.industry || ''}`);
+      } else {
+        // Fetch general onboarding questionnaire
+        response = await apiService.get('/questionnaires/active');
+      }
+      
       setQuestionnaire(response.questionnaire);
       
       // Try to load saved progress
@@ -92,10 +110,12 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
           }
         } catch (error) {
           // No saved progress, continue with empty answers
+          console.warn('No saved progress found or error fetching progress:', error);
         }
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to load questionnaire');
+      console.error('Error fetching questionnaire:', error);
     } finally {
       setIsLoading(false);
     }
@@ -106,9 +126,13 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
 
     try {
       setIsSaving(true);
+      // Upload files first if any
+      const uploadedFileUrls = await handleFileUploads();
+      const answersWithFiles = { ...answers, ...uploadedFileUrls };
+
       await apiService.post('/questionnaires/progress', {
         questionnaireId: questionnaire.id,
-        answers
+        answers: answersWithFiles
       });
       toast.success('Progress saved');
     } catch (error: any) {
@@ -116,6 +140,33 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleFileUploads = async () => {
+    const uploadedUrls: Record<string, string> = {};
+    for (const questionId in filesToUpload) {
+      const file = filesToUpload[questionId];
+      if (file) {
+        try {
+          setUploadProgress(prev => ({ ...prev, [questionId]: 0 }));
+          const response = await apiService.uploadFile(
+            `/questionnaires/upload-response-file?questionId=${questionId}`,
+            file,
+            (progress) => setUploadProgress(prev => ({ ...prev, [questionId]: progress }))
+          );
+          uploadedUrls[questionId] = response.filePath; // Assuming backend returns filePath
+          toast.success(`File ${file.name} uploaded!`);
+        } catch (error: any) {
+          toast.error(`Failed to upload file ${file.name}: ${error.message}`);
+          console.error(`File upload error for ${file.name}:`, error);
+          // Do not re-throw, allow other parts of the form to submit
+        } finally {
+          setFilesToUpload(prev => ({ ...prev, [questionId]: null })); // Clear file after attempt
+          setUploadProgress(prev => ({ ...prev, [questionId]: 100 })); // Mark as done
+        }
+      }
+    }
+    return uploadedUrls;
   };
 
   const isQuestionVisible = (question: Question): boolean => {
@@ -141,7 +192,12 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
     
     for (const question of requiredQuestions) {
       const answer = answers[question.id];
-      if (!answer || (typeof answer === 'string' && answer.trim() === '')) {
+      if (question.type === 'file') {
+        // For files, check if a file is selected or if a URL is already present in answers
+        if (question.required && !filesToUpload[question.id] && !answers[question.id]) {
+          return false;
+        }
+      } else if (!answer || (typeof answer === 'string' && answer.trim() === '')) {
         return false;
       }
     }
@@ -151,23 +207,6 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
 
   const handleAnswerChange = (questionId: string, value: any) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
-  };
-
-  const handleNext = () => {
-    if (!validateCurrentSection()) {
-      toast.error('Please answer all required questions in this section');
-      return;
-    }
-
-    if (currentSection < totalSections - 1) {
-      setCurrentSection(prev => prev + 1);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentSection > 0) {
-      setCurrentSection(prev => prev - 1);
-    }
   };
 
   const handleSubmit = async () => {
@@ -180,9 +219,13 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
 
     try {
       setIsSubmitting(true);
+      // Upload files first if any
+      const uploadedFileUrls = await handleFileUploads();
+      const answersWithFiles = { ...answers, ...uploadedFileUrls };
+
       const response = await apiService.post('/questionnaires/responses', {
         questionnaireId: questionnaire.id,
-        answers,
+        answers: answersWithFiles,
         isComplete: true
       });
 
@@ -326,6 +369,59 @@ export const QuestionnaireWizard: React.FC<QuestionnaireWizardProps> = ({
             onChange={(e) => handleAnswerChange(question.id, e.target.value)}
             required={question.required}
           />
+        );
+
+      case 'file':
+        const onDropFile = useCallback((acceptedFiles: File[]) => {
+          if (acceptedFiles.length > 0) {
+            const file = acceptedFiles[0];
+            setFilesToUpload(prev => ({ ...prev, [question.id]: file }));
+            // Store file name in answers for display, actual upload happens on save/submit
+            handleAnswerChange(question.id, file.name);
+          }
+        }, [question.id]);
+
+        const { getRootProps, getInputProps, isDragActive } = useDropzone({
+          onDrop: onDropFile,
+          multiple: false,
+          accept: { 'image/jpeg': [], 'image/png': [], 'application/pdf': [] },
+          maxSize: 15 * 1024 * 1024, // 15MB
+        });
+
+        const currentFile = filesToUpload[question.id] || (answers[question.id] ? { name: answers[question.id] } : null);
+
+        return (
+          <div key={question.id} className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              {question.question}
+              {question.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer
+                ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+            >
+              <input {...getInputProps()} />
+              <UploadCloud className="mx-auto h-10 w-10 text-gray-400" />
+              <p className="mt-2 text-sm text-gray-600">
+                {isDragActive ? 'Drop the file here ...' : 'Drag & drop file here, or click to select file'}
+              </p>
+              <p className="text-xs text-gray-500">PDF, PNG, JPG up to 15MB</p>
+              {currentFile && (
+                <p className="mt-2 text-sm text-blue-600">
+                  Selected: {currentFile.name} {uploadProgress[question.id] !== undefined && uploadProgress[question.id] < 100 && `(${uploadProgress[question.id]}%)`}
+                </p>
+              )}
+            </div>
+            {uploadProgress[question.id] !== undefined && uploadProgress[question.id] < 100 && (
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                <div 
+                  className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress[question.id]}%` }}
+                />
+              </div>
+            )}
+          </div>
         );
 
       default:

@@ -12,23 +12,71 @@ const responseValidation = [
 
 const getActiveQuestionnaire = async (req, res) => {
   try {
-    logger.info('Fetching active onboarding questionnaire');
+    const { serviceId, country, industry } = req.query;
+    logger.info('Fetching active questionnaire with params:', { serviceId, country, industry });
 
-    // Get the main business plan questionnaire for onboarding
-    const { data: questionnaire, error } = await supabase
+    let query = supabase
       .from('questionnaires')
       .select(`
         *,
         service:services(id, name, category, description)
       `)
-      .eq('is_active', true)
-      .eq('title', 'Business Plan Consultancy Questionnaire')
-      .single();
+      .eq('is_active', true);
+
+    // Prioritize specific questionnaires
+    if (serviceId) {
+      query = query.eq('service_id', serviceId);
+      if (industry) {
+        // Find industry ID
+        const { data: industryData } = await supabase.from('industries').select('id').eq('name', industry).single();
+        if (industryData) {
+          query = query.eq('industry_id', industryData.id);
+        }
+      }
+      if (country) {
+        // Find country ID
+        const { data: countryData } = await supabase.from('countries').select('id').eq('name', country).single();
+        if (countryData) {
+          query = query.eq('country_id', countryData.id);
+        }
+      }
+    } else {
+      // If no serviceId, default to the general onboarding questionnaire
+      query = query.eq('title', 'Business Plan Consultancy Questionnaire');
+    }
+
+    const { data: questionnaire, error } = await query.single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({
-          error: 'No active questionnaire found'
+      if (error.code === 'PGRST116') { // No rows found
+        // Fallback to a general questionnaire if a specific one isn't found
+        logger.warn('No specific questionnaire found, attempting fallback.');
+        const { data: fallbackQuestionnaire, error: fallbackError } = await supabase
+          .from('questionnaires')
+          .select(`
+            *,
+            service:services(id, name, category, description)
+          `)
+          .eq('is_active', true)
+          .eq('title', 'Business Plan Consultancy Questionnaire') // Fallback to the main onboarding questionnaire
+          .single();
+
+        if (fallbackError) {
+          logger.error('Fallback questionnaire error:', fallbackError);
+          return res.status(404).json({
+            error: 'No active questionnaire found.'
+          });
+        }
+        logger.info('Fallback questionnaire retrieved successfully.');
+        return res.json({
+          questionnaire: {
+            id: fallbackQuestionnaire.id,
+            title: fallbackQuestionnaire.title,
+            description: fallbackQuestionnaire.description,
+            questions: fallbackQuestionnaire.questions,
+            conditionalLogic: fallbackQuestionnaire.conditional_logic,
+            service: fallbackQuestionnaire.service
+          }
         });
       }
       throw error;
@@ -262,12 +310,55 @@ const getProgress = async (req, res) => {
   }
 };
 
+const uploadResponseFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded.' });
+    }
+
+    const { questionId } = req.query; // Get the question ID to associate the file
+    const userId = req.user.id;
+
+    if (!questionId) {
+      return res.status(400).json({ error: 'Question ID is required for file upload.' });
+    }
+
+    // Define a path in Supabase Storage: user_id/questionnaire_files/question_id/original_filename
+    const fileName = `${userId}/questionnaire_files/${questionId}/${req.file.originalname}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('questionnaire_uploads') // Using a new bucket for questionnaire uploads
+      .upload(fileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    // Construct the public URL for the uploaded file
+    const { data: publicUrlData } = supabase.storage
+      .from('questionnaire_uploads')
+      .getPublicUrl(fileName);
+
+    logger.info(`Questionnaire file uploaded: ${fileName} by user ${userId}`);
+    res.status(200).json({ 
+      message: 'File uploaded successfully', 
+      filePath: publicUrlData.publicUrl 
+    });
+  } catch (error) {
+    logger.error('Questionnaire file upload error:', error);
+    res.status(500).json({ error: 'Failed to upload questionnaire file.' });
+  }
+};
+
 export {
   getActiveQuestionnaire,
   submitResponse,
   skipQuestionnaire,
   saveProgress,
   getProgress,
+  uploadResponseFile, // Export the new function
   responseValidation,
   handleValidationErrors
 };

@@ -95,6 +95,8 @@ const createService = async (req, res) => {
       rush_surcharge_percent,
       features,
       additional_notes,
+      milestone_template,
+      rush_available,
     } = req.body;
 
     // Validate price range
@@ -118,6 +120,8 @@ const createService = async (req, res) => {
       rush_surcharge_percent,
       features: features || [],
       additional_notes,
+      milestone_template: milestone_template || [],
+      rush_available: rush_available !== undefined ? rush_available : false,
     });
 
     logger.info(`New service created: ${service.name} by user ${req.user.id}`);
@@ -152,6 +156,8 @@ const updateService = async (req, res) => {
       features,
       additional_notes,
       is_active,
+      milestone_template,
+      rush_available,
     } = req.body;
 
     const service = await Service.findByPk(id);
@@ -163,10 +169,8 @@ const updateService = async (req, res) => {
     }
 
     // Validate price range if provided
-    const new_price_min =
-      price_min !== undefined ? price_min : service.price_min;
-    const new_price_max =
-      price_max !== undefined ? price_max : service.price_max;
+    const new_price_min = price_min !== undefined ? price_min : service.price_min;
+    const new_price_max = price_max !== undefined ? price_max : service.price_max;
 
     if (new_price_max < new_price_min) {
       return res.status(400).json({
@@ -186,7 +190,9 @@ const updateService = async (req, res) => {
       standard_turnaround_days:
         standard_turnaround_days || service.standard_turnaround_days,
       rush_turnaround_days:
-        rush_turnaround_days || service.rush_turnaround_days,
+        rush_turnaround_days !== undefined
+          ? rush_turnaround_days
+          : service.rush_turnaround_days,
       price_min: new_price_min,
       price_max: new_price_max,
       currency: currency || service.currency,
@@ -197,6 +203,8 @@ const updateService = async (req, res) => {
       features: features || service.features,
       additional_notes: additional_notes || service.additional_notes,
       is_active: is_active !== undefined ? is_active : service.is_active,
+      milestone_template: milestone_template || service.milestone_template,
+      rush_available: rush_available !== undefined ? rush_available : service.rush_available,
     });
 
     logger.info(`Service updated: ${service.name} by user ${req.user.id}`);

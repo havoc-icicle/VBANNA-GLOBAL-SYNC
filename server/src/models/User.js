@@ -125,7 +125,8 @@ export class User {
           referred_by_partner_id: userData.referredByPartnerId,
           partner_specific_metadata: userData.partnerSpecificMetadata || {},
           referral_code: userData.referralCode,
-          partner_type: userData.partnerType
+          partner_type: userData.partnerType,
+          compliance_status: userData.complianceStatus || {},
         })
         .select()
         .single();
@@ -178,6 +179,8 @@ export class User {
         const saltRounds = process.env.NODE_ENV === 'development' ? 10 : 12;
         updates.password = await bcrypt.hash(updateData.password, saltRounds);
       }
+      if (updateData.onboarding_status) updates.onboarding_status = updateData.onboarding_status; // Allow updating onboarding status
+      if (updateData.complianceStatus) updates.compliance_status = updateData.complianceStatus; // Allow updating compliance status
 
       const { data, error } = await supabase
         .from('users')
@@ -229,7 +232,8 @@ export class User {
       partnerType: this.partner_type,
       createdAt: this.created_at,
       updatedAt: this.updated_at,
-      onboarding_status: this.onboarding_status
+      onboarding_status: this.onboarding_status,
+      complianceStatus: this.compliance_status,
     };
   }
 }

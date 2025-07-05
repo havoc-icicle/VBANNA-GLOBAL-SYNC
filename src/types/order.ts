@@ -24,6 +24,8 @@ export interface Order {
   notes?: string;
   isPartialPaymentAllowed: boolean;
   paymentSchedule: PaymentScheduleItem[];
+  milestones: OrderMilestone[];
+  currentMilestone: string;
   createdAt: string;
   updatedAt: string;
   
@@ -32,6 +34,14 @@ export interface Order {
   user?: User;
   payments?: Payment[];
   invoice?: Invoice;
+}
+
+export interface OrderMilestone {
+  name: string;
+  description: string;
+  estimated_days: number;
+  status: 'pending' | 'in_progress' | 'completed';
+  completion_date?: string;
 }
 
 export interface PaymentScheduleItem {

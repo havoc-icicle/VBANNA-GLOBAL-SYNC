@@ -20,5 +20,6 @@ router.get('/all', auth, authorize('Admin', 'Mid-Broker'), getAllOrders);
 router.get('/:id', auth, getOrderById);
 router.put('/:id/status', auth, authorize('Admin'), updateOrderStatus);
 router.post('/:id/revision', auth, requestRevision);
+router.put('/:id/milestone', auth, authorize('Admin'), updateOrderMilestone); // New endpoint for milestone updates
 
 export default router;

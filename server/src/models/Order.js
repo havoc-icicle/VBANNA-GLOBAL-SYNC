@@ -192,7 +192,9 @@ export class Order {
         max_revisions: orderData.maxRevisions || 1,
         requirements: orderData.requirements || {},
         is_partial_payment_allowed: orderData.isPartialPaymentAllowed || false,
-        payment_schedule: orderData.paymentSchedule || []
+        payment_schedule: orderData.paymentSchedule || [],
+        milestones: orderData.milestones || [],
+        current_milestone: orderData.currentMilestone || 'Order Placed', // Default initial milestone
       })
       .select()
       .single();
@@ -210,6 +212,8 @@ export class Order {
     if (updateData.startDate) updates.start_date = updateData.startDate;
     if (updateData.actualCompletionDate) updates.actual_completion_date = updateData.actualCompletionDate;
     if (updateData.revisionCount !== undefined) updates.revision_count = updateData.revisionCount;
+    if (updateData.milestones) updates.milestones = updateData.milestones;
+    if (updateData.currentMilestone !== undefined) updates.current_milestone = updateData.currentMilestone;
 
     const { data, error } = await supabase
       .from('orders')
@@ -248,6 +252,8 @@ export class Order {
       notes: this.notes,
       isPartialPaymentAllowed: this.is_partial_payment_allowed,
       paymentSchedule: this.payment_schedule,
+      milestones: this.milestones,
+      currentMilestone: this.current_milestone,
       createdAt: this.created_at,
       updatedAt: this.updated_at
     };
